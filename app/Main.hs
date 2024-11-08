@@ -1,6 +1,8 @@
 module Main where
 
-import Grid (exConfig, loop)
+import Grid (loop)
+import Options (opts)
+import Options.Applicative (execParser)
 
 main :: IO ()
-main = loop exConfig
+main = execParser opts >>= loop

@@ -1,35 +1,48 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 module Grid where
 
 import Control.Concurrent (threadDelay)
 import Control.Monad (void)
 import Data.Array
 import Data.Bool (bool)
+import Options
 import System.Console.ANSI
 import System.IO
 
-type Grid = Array Int
+class (Functor w) => Comonad w where
+  extract :: w a -> a
+  duplicate :: w a -> w (w a)
+  duplicate = extend id
+  extend :: (w a -> b) -> w a -> w b
+  extend f = fmap f . duplicate
 
-neighbours :: Grid Bool -> Int -> (Bool, Bool)
-neighbours grid x = (x /= fst (bounds grid) && grid ! pred x, x /= snd (bounds grid) && grid ! succ x)
+data Grid s a = Grid {grid :: Array s a, focus :: s}
+  deriving (Functor)
 
-type Rule a = (a, a) -> a -> a
+instance (Ix s) => Comonad (Grid s) where
+  extract g = grid g ! focus g
+  duplicate g = g{grid = array (bounds $ grid g) . fmap (\s -> (s, Grid (grid g) s)) . indices . grid $ g}
 
-step :: Grid Bool -> Rule Bool -> Grid Bool
-step grid rule = array (bounds grid) $ (\(x, a) -> (x, rule (neighbours grid x) a)) <$> assocs grid
+neighbours :: Grid Int Bool -> (Bool, Bool)
+neighbours (Grid g f) = (f /= fst (bounds g) && g ! pred f, f /= snd (bounds g) && g ! succ f)
 
-pprint :: Grid Bool -> IO ()
-pprint = putStr . fmap (bool '⬛' '⬜' . snd) . assocs
+type Rule a = Grid Int a -> a
 
-data Config = Config {start :: Grid Bool, rule :: Rule Bool}
+pprint :: Grid Int Bool -> IO ()
+pprint = putStr . fmap (bool '⬛' '⬜') . elems . grid
 
-exConfig :: Config
-exConfig = Config (array (begin, end) [(i, False) | i <- [begin .. end]] // [(0, True), (2, True), (4, True)]) exRule
+thirty :: Rule Bool
+thirty g = p /= (extract g || r)
  where
-  exRule (p, r) q = p /= (q || r)
-  begin = -35
-  end = 35
+  (p, r) = neighbours g
+
+start :: Config -> Grid Int Bool
+start cfg = Grid arr 0
+ where
+  arr = array (0, width cfg) [(x, False) | x <- [0 .. width cfg]] // [(width cfg `div` 2, True)]
 
 loop :: Config -> IO ()
 loop cfg = void $ saveCursor *> clearScreen *> loop' (start cfg)
  where
-  loop' arr = pprint arr *> hFlush stdout *> restoreCursor *> clearScreen *> threadDelay 1000000 *> loop' (step arr (rule cfg))
+  loop' g = pprint g *> hFlush stdout *> restoreCursor *> clearScreen *> threadDelay (time cfg * 1000) *> loop' (extend thirty g)
