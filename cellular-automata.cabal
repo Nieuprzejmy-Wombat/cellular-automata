@@ -65,6 +65,8 @@ executable cellular-automata
     other-modules: 
       Grid,
       Options,
+      Automata,
+      Vec,
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

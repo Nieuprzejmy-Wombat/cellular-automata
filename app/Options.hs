@@ -1,15 +1,21 @@
+{-# LANGUAGE KindSignatures #-}
+
 module Options (Config (..), opts) where
 
+import GHC.Natural
 import Options.Applicative
+import Vec (Vec (..))
 
-data Config = Config {width :: Int, height :: Int, time :: Int}
+data Config n = Config {size :: Vec n Int, delta :: Int, autoType :: AutomatonType}
 
-config :: Parser Config
-config = Config <$> w <*> h <*> t
- where
-  w = option auto $ long "width" <> short 'w' <> metavar "INT" <> value 10 <> help "width of the grid"
-  h = option auto $ long "height" <> short 'h' <> metavar "INT" <> value 10 <> help "height of the grid"
-  t = option auto $ long "time" <> short 't' <> metavar "INT" <> value 1000 <> help "time to wait between ticks in milliseconds"
+type AutomatonType = String
 
-opts :: ParserInfo Config
+config :: Parser (Config n)
+config = Config <$> s <*> d <*> automatonType
+  where
+    s = argument auto $ metavar "<n-tuple>" <> help "grid size" <> value (Cons 30 (Cons 30 Nil))
+    d = option auto $ long "delta" <> short 'd' <> metavar "INT" <> value 1000 <> help "time to wait between ticks in milliseconds"
+    automatonType = strOption $ long "type" <> metavar "conway|brian" <> help "automaton type"
+
+opts :: ParserInfo (Config n)
 opts = info (config <**> helper) $ fullDesc <> progDesc "simulate a cellular automaton" <> header "cellular automata simulator"
