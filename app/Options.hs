@@ -4,9 +4,8 @@ module Options (Config (..), opts) where
 
 import GHC.Natural
 import Options.Applicative
-import Vec (Vec (..))
 
-data Config n = Config {size :: Vec n Int, delta :: Int, autoType :: AutomatonType}
+data Config coords = Config {size :: coords, delta :: Int, autoType :: AutomatonType}
 
 type AutomatonType = String
 

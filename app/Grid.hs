@@ -3,8 +3,6 @@
 module Grid where
 
 import Data.Array
-import Data.Array.IArray ((!?))
-import Data.Maybe (fromMaybe)
 
 class (Functor w) => Comonad w where
   extract :: w a -> a
@@ -22,26 +20,37 @@ genGrid (beginning, end) gen = Grid {focus = beginning, grid = array (beginning,
 defaultGrid :: (Ix s, Default a) => (s, s) -> Grid s a
 defaultGrid = flip genGrid (const def)
 
-instance (Ix s) => Comonad (Grid s) where
-  extract (Grid g s) = g ! s -- g ! wrap (bounds g) (x, y)
+instance (Coord s) => Comonad (Grid s) where
+  extract (Grid g s) = g ! wrap (bounds g) s
   duplicate g = g {grid = array (bounds $ grid g) . fmap (\s -> (s, g {focus = s})) . indices . grid $ g}
-
-wrap :: ((Int, Int), (Int, Int)) -> (Int, Int) -> (Int, Int)
-wrap ((x0, y0), (x1, y1)) (x, y) = (wrap' (x0, x1) x, wrap' (y0, y1) y)
-  where
-    wrap' :: (Int, Int) -> Int -> Int
-    wrap' (low, high) n
-      | n > high = wrap' (low, high) $ low - 1 + (abs n - abs high)
-      | n < low = wrap' (low, high) $ high + 1 - (abs n - abs low)
-      | otherwise = n
-
--- wrap' (-20, -10) -9 = -20
-
-safeExtract :: (Default a, Ix i) => Grid i a -> a
-safeExtract g = fromMaybe def $ grid g !? focus g
 
 class Default a where
   def :: a
 
 instance Default Bool where
   def = False
+
+class (Ix a) => Coord a where
+  wrap :: (a, a) -> a -> a
+  neighbours :: a -> [a]
+  centered :: a -> (a, a)
+
+instance Coord Int where
+  wrap (low, high) n
+    | n > high = low - 1 + (n - high)
+    | n < low = high + 1 - (low - n)
+    | otherwise = n
+  neighbours a = [pred a, succ a]
+  centered a = (negate (a `div` 2), a `div` 2)
+
+instance (Coord a, Coord b) => Coord (a, b) where
+  wrap ((lowx, lowy), (highx, highy)) (nx, ny) = (wrap (lowx, highx) nx, wrap (lowy, highy) ny)
+  neighbours (x, y) = [(i, j) | i <- x : neighbours x, j <- y : neighbours y, (i, j) /= (x, y)]
+  centered (x, y) = case (centered x, centered y) of
+    ((lowx, highx), (lowy, highy)) -> ((lowx, lowy), (highx, highy))
+
+instance (Coord a, Coord b, Coord c) => Coord (a, b, c) where
+  wrap ((lowx, lowy, lowz), (highx, highy, highz)) (nx, ny, nz) = (wrap (lowx, highx) nx, wrap (lowy, highy) ny, wrap (lowz, highz) nz)
+  neighbours (x, y, z) = [(i, j, k) | i <- x : neighbours x, j <- y : neighbours y, k <- z : neighbours z, (i, j, k) /= (x, y, z)]
+  centered (x, y, z) = case (centered x, centered y, centered z) of
+    ((lowx, highx), (lowy, highy), (lowz, highz)) -> ((lowx, lowy, lowz), (highx, highy, highz))

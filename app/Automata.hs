@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -12,18 +11,17 @@ import Grid
 import Options
 import System.Console.ANSI
 import System.IO
-import Vec
-
-neighboursMoore :: (Default a) => Grid (Vec n Int) a -> [a]
-neighboursMoore (Grid g f) = fmap (safeExtract . Grid g) [i | i <- range (pred <$> f, succ <$> f), i /= f]
 
 data Automaton s a = Automaton {pprint :: Grid s a -> IO (), rule :: Grid s a -> a, start :: s -> Grid s a}
 
-defaultAutomaton :: (Show a, Default a) => Automaton (Vec n Int) a
-defaultAutomaton = Automaton print extract $ \cfg -> defaultGrid (negate . (`div` 2) <$> dimensions, (`div` 2) <$> dimensions)
+defaultAutomaton :: (Show a, Default a) => Automaton s a
+defaultAutomaton = Automaton print extract $ defaultGrid . centered
 
 toggle :: (Ix s) => Grid s Bool -> [s] -> Grid s Bool
 toggle g points = g {grid = grid g // [(p, True) | p <- points]}
+
+neighbourValues :: (Coord s) => Grid s a -> [a]
+neighbourValues g = (\n -> extract g {focus = n}) <$> neighbours (focus g)
 
 conway :: Automaton (Int, Int) Bool
 conway = (defaultAutomaton @Bool) {pprint = _pprint, rule = _rule, start = (`toggle` coords) . start defaultAutomaton}
@@ -31,7 +29,7 @@ conway = (defaultAutomaton @Bool) {pprint = _pprint, rule = _rule, start = (`tog
     _pprint g = putStr . concat $ [[bool '⬜' '⬛' (grid g ! (x, y)) | x <- [x0 .. x1]] ++ "\n" | y <- [y0 .. y1]]
       where
         ((x0, y0), (x1, y1)) = bounds . grid $ g
-    _rule g = case (extract g, length . filter id . neighboursMoore $ g) of
+    _rule g = case (extract g, length . filter id . neighbourValues $ g) of
       (True, x) | x < 2 -> False
       (True, x) | x == 2 || x == 3 -> True
       (True, x) | x > 3 -> False
@@ -60,11 +58,11 @@ brian = (defaultAutomaton @ThreeState) {pprint = _pprint, rule = _rule, start = 
     _rule g = case extract g of
       On -> Dying
       Dying -> Off
-      Off | length (filter (== On) $ neighboursMoore g) == 2 -> On
+      Off | length (filter (== On) $ neighbourValues g) == 2 -> On
       Off -> Off
     coords = [(0, 0), (1, 0), (1, 1), (1, 2), (0, -1), (-1, 0), (-2, 0), (-1, -1)]
 
-loop :: (Ix s) => Config 2 -> Automaton s a -> IO ()
+loop :: (Ix s) => Config String -> Automaton s a -> IO ()
 loop cfg auto = void $ saveCursor *> clearScreen *> loop' (start auto cfg)
   where
     loop' g = pprint auto g *> hFlush stdout *> restoreCursor *> clearScreen *> threadDelay (time cfg * 1000) *> loop' (extend (rule auto) g)
