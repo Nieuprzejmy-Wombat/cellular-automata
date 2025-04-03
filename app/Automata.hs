@@ -7,6 +7,7 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (void)
 import Data.Array
 import Data.Bool (bool)
+import Data.Foldable (traverse_)
 import Grid
 import Options
 import System.Console.ANSI
@@ -14,8 +15,8 @@ import System.IO
 
 data Automaton s a = Automaton {pprint :: Grid s a -> IO (), rule :: Grid s a -> a, start :: s -> Grid s a}
 
-defaultAutomaton :: (Show a, Default a) => Automaton s a
-defaultAutomaton = Automaton print extract $ defaultGrid . centered
+defaultAutomaton :: (Coord s, Show a, Default a) => Automaton s a
+defaultAutomaton = Automaton (traverse_ print) extract $ defaultGrid . centered
 
 toggle :: (Ix s) => Grid s Bool -> [s] -> Grid s Bool
 toggle g points = g {grid = grid g // [(p, True) | p <- points]}
@@ -24,7 +25,7 @@ neighbourValues :: (Coord s) => Grid s a -> [a]
 neighbourValues g = (\n -> extract g {focus = n}) <$> neighbours (focus g)
 
 conway :: Automaton (Int, Int) Bool
-conway = (defaultAutomaton @Bool) {pprint = _pprint, rule = _rule, start = (`toggle` coords) . start defaultAutomaton}
+conway = (defaultAutomaton @(Int, Int) @Bool) {pprint = _pprint, rule = _rule, start = (`toggle` coords) . start defaultAutomaton}
   where
     _pprint g = putStr . concat $ [[bool '⬜' '⬛' (grid g ! (x, y)) | x <- [x0 .. x1]] ++ "\n" | y <- [y0 .. y1]]
       where
@@ -47,7 +48,7 @@ toggleBrian :: (Ix s) => Grid s ThreeState -> [s] -> Grid s ThreeState
 toggleBrian g points = g {grid = grid g // [(p, On) | p <- points]}
 
 brian :: Automaton (Int, Int) ThreeState
-brian = (defaultAutomaton @ThreeState) {pprint = _pprint, rule = _rule, start = (`toggleBrian` coords) . start defaultAutomaton}
+brian = (defaultAutomaton @(Int, Int) @ThreeState) {pprint = _pprint, rule = _rule, start = (`toggleBrian` coords) . start defaultAutomaton}
   where
     _pprint g = sequence_ $ [traverse helper [grid g ! (x, y) | x <- [x0 .. x1]] *> putStr "\n" | y <- [y0 .. y1]]
       where
@@ -62,7 +63,7 @@ brian = (defaultAutomaton @ThreeState) {pprint = _pprint, rule = _rule, start = 
       Off -> Off
     coords = [(0, 0), (1, 0), (1, 1), (1, 2), (0, -1), (-1, 0), (-2, 0), (-1, -1)]
 
-loop :: (Ix s) => Config String -> Automaton s a -> IO ()
-loop cfg auto = void $ saveCursor *> clearScreen *> loop' (start auto cfg)
+loop :: (Coord s) => s -> Config -> Automaton s a -> IO ()
+loop size cfg auto = void $ saveCursor *> clearScreen *> loop' (start auto size)
   where
-    loop' g = pprint auto g *> hFlush stdout *> restoreCursor *> clearScreen *> threadDelay (time cfg * 1000) *> loop' (extend (rule auto) g)
+    loop' g = pprint auto g *> hFlush stdout *> restoreCursor *> clearScreen *> threadDelay (delta cfg * 1000) *> loop' (extend (rule auto) g)

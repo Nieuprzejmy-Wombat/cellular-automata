@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 
 module Grid where
@@ -12,7 +13,7 @@ class (Functor w) => Comonad w where
   extend f = fmap f . duplicate
 
 data Grid s a = Grid {grid :: Array s a, focus :: s}
-  deriving (Functor, Show)
+  deriving (Functor, Show, Foldable)
 
 genGrid :: (Ix s) => (s, s) -> (s -> a) -> Grid s a
 genGrid (beginning, end) gen = Grid {focus = beginning, grid = array (beginning, end) [(coord, gen coord) | coord <- range (beginning, end)]}
